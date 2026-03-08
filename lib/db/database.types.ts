@@ -129,6 +129,8 @@ export type Database = {
           club_id: string
           created_at: string
           id: string
+          last_message_at: string | null
+          opted_out_at: string | null
           player_name: string | null
           updated_at: string
           wa_contact_id: string
@@ -138,6 +140,8 @@ export type Database = {
           club_id: string
           created_at?: string
           id?: string
+          last_message_at?: string | null
+          opted_out_at?: string | null
           player_name?: string | null
           updated_at?: string
           wa_contact_id: string
@@ -147,6 +151,8 @@ export type Database = {
           club_id?: string
           created_at?: string
           id?: string
+          last_message_at?: string | null
+          opted_out_at?: string | null
           player_name?: string | null
           updated_at?: string
           wa_contact_id?: string
@@ -172,6 +178,7 @@ export type Database = {
           role: Database["public"]["Enums"]["message_role"]
           tool_call_id: string | null
           tool_name: string | null
+          tool_use_block: Json | null
         }
         Insert: {
           content: string
@@ -182,6 +189,7 @@ export type Database = {
           role: Database["public"]["Enums"]["message_role"]
           tool_call_id?: string | null
           tool_name?: string | null
+          tool_use_block?: Json | null
         }
         Update: {
           content?: string
@@ -192,6 +200,7 @@ export type Database = {
           role?: Database["public"]["Enums"]["message_role"]
           tool_call_id?: string | null
           tool_name?: string | null
+          tool_use_block?: Json | null
         }
         Relationships: [
           {

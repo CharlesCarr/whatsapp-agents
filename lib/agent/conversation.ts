@@ -3,11 +3,13 @@ import type { Json } from "@/lib/db/database.types";
 import { getDefaultLLMProvider } from "@/lib/llm";
 import { createBookingProvider } from "@/lib/booking/factory";
 import { BOOKING_TOOLS, executeTool } from "./tools";
+import { log } from "@/lib/logger";
 import type { Club } from "@/lib/db/types";
-import type { Message } from "@/lib/llm/types";
+import type { Message, ToolCall } from "@/lib/llm/types";
 
 const MAX_HISTORY = 20;
 const MAX_TOOL_ITERATIONS = 5;
+const SESSION_TTL_DAYS = 7;
 
 interface AgentConfig {
   systemPromptOverride?: string;
@@ -83,20 +85,44 @@ export async function runAgent(params: {
         wa_contact_id: waContactId,
         wa_group_id: waGroupId ?? null,
         player_name: playerName ?? null,
+        last_message_at: new Date().toISOString(),
       })
       .select()
       .single();
 
     if (createError || !created) throw new Error(`Failed to create conversation: ${createError?.message}`);
     conversation = created;
-  } else if (playerName && !conversation.player_name) {
-    const { data: updated } = await db
-      .from("conversations")
-      .update({ player_name: playerName })
-      .eq("id", conversation.id)
-      .select()
-      .single();
-    if (updated) conversation = updated;
+  } else {
+    // Session TTL — if idle for more than SESSION_TTL_DAYS, clear message history
+    if (conversation.last_message_at) {
+      const daysSince =
+        (Date.now() - new Date(conversation.last_message_at).getTime()) / 86400000;
+      if (daysSince > SESSION_TTL_DAYS) {
+        log.info("[agent] session expired — clearing history", {
+          conversationId: conversation.id,
+          clubId,
+          daysSince: Math.round(daysSince),
+        });
+        await db.from("messages").delete().eq("conversation_id", conversation.id);
+      }
+    }
+
+    // Update player name if newly available
+    if (playerName && !conversation.player_name) {
+      const { data: updated } = await db
+        .from("conversations")
+        .update({ player_name: playerName, last_message_at: new Date().toISOString() })
+        .eq("id", conversation.id)
+        .select()
+        .single();
+      if (updated) conversation = updated;
+    } else {
+      // Always touch last_message_at so the TTL resets on each interaction
+      await db
+        .from("conversations")
+        .update({ last_message_at: new Date().toISOString() })
+        .eq("id", conversation.id);
+    }
   }
 
   // Persist incoming user message
@@ -114,22 +140,38 @@ export async function runAgent(params: {
     .order("created_at", { ascending: true })
     .limit(MAX_HISTORY);
 
-  // Build LLM message array.
-  // Filter out TOOL messages and intermediate ASSISTANT messages (those that triggered tool calls,
-  // identified by having metadata.toolCalls). These can't be safely reconstructed from the DB
-  // because the Anthropic API requires tool_use blocks in the assistant message to pair with
-  // tool_result blocks — but we only store the plain text summary. Final assistant replies
-  // already contain the confirmed outcome (e.g. booking ref), so context is preserved.
-  const llmMessages: Message[] = (history ?? [])
-    .filter((m) => {
-      if (m.role === Role.TOOL) return false;
-      if (m.role === Role.ASSISTANT && m.metadata && (m.metadata as Record<string, unknown>).toolCalls) return false;
-      return true;
-    })
-    .map((m) => ({
-      role: m.role === Role.USER ? ("user" as const) : ("assistant" as const),
-      content: m.content,
-    }));
+  // Reconstruct LLM message history with proper tool_use + tool_result pairing.
+  // Assistant messages that triggered tool calls have their full ToolCall array stored in
+  // tool_use_block. Tool result messages (role = TOOL) are included only when the preceding
+  // reconstructed message has toolCalls — this handles both new data (with tool_use_block)
+  // and old data (without) gracefully.
+  const llmMessages: Message[] = [];
+  for (const m of history ?? []) {
+    if (m.role === Role.ASSISTANT && m.tool_use_block) {
+      // Intermediate assistant turn — carry the tool_use blocks for Anthropic API pairing
+      llmMessages.push({
+        role: "assistant",
+        content: m.content,
+        toolCalls: m.tool_use_block as unknown as ToolCall[],
+      });
+    } else if (m.role === Role.TOOL) {
+      // Only include if the preceding reconstructed message has toolCalls (avoids orphaned pairs)
+      const prev = llmMessages[llmMessages.length - 1];
+      if (prev?.role === "assistant" && prev.toolCalls?.length) {
+        llmMessages.push({
+          role: "tool",
+          content: m.content,
+          toolCallId: m.tool_call_id ?? "",
+          toolName: m.tool_name ?? "",
+        });
+      }
+    } else if (m.role === Role.USER || m.role === Role.ASSISTANT) {
+      llmMessages.push({
+        role: m.role === Role.USER ? "user" : "assistant",
+        content: m.content,
+      });
+    }
+  }
 
   const llm = getDefaultLLMProvider();
   const systemPrompt = buildSystemPrompt(club, playerName ?? conversation.player_name ?? null);
@@ -158,11 +200,13 @@ export async function runAgent(params: {
       ? `${response.content}\n[Tools: ${toolNames}]`
       : `[Tools: ${toolNames}]`;
 
+    // Persist the assistant turn with tool_use_block for accurate history reconstruction
     await db.from("messages").insert({
       conversation_id: conversation.id,
       role: Role.ASSISTANT,
       content: assistantContent,
       metadata: { toolCalls: response.toolCalls } as unknown as Json,
+      tool_use_block: response.toolCalls as unknown as Json,
     });
 
     llmMessages.push({ role: "assistant", content: response.content ?? "", toolCalls: response.toolCalls });
@@ -174,6 +218,12 @@ export async function runAgent(params: {
         clubId,
         conversationId: conversation.id,
         playerName: playerName ?? conversation.player_name ?? undefined,
+      });
+
+      log.info("[agent] tool executed", {
+        tool: toolCall.name,
+        clubId,
+        conversationId: conversation.id,
       });
 
       await db.from("messages").insert({
@@ -202,6 +252,8 @@ export async function runAgent(params: {
       content: assistantResponse,
     });
   }
+
+  log.info("[agent] turn complete", { clubId, conversationId: conversation.id });
 
   return assistantResponse || "Sorry, I wasn't able to process that. Please try again.";
 }

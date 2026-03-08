@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "crypto";
+import { log } from "@/lib/logger";
 import type { IncomingMessage, WhatsAppWebhookPayload, WebhookMessage, WebhookContact } from "./types";
 
 const WA_API_URL = process.env.WHATSAPP_API_URL || "https://waba.360dialog.io/v1";
@@ -36,7 +37,7 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<voi
   for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
     if (attempt > 0) {
       const delay = RETRY_DELAYS_MS[attempt - 1]!;
-      console.log(`[whatsapp] Retry attempt ${attempt} after ${delay}ms`);
+      log.info("[whatsapp] retry attempt", { attempt, delayMs: delay, to });
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
 

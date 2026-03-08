@@ -15,3 +15,13 @@ Tasks are completed sequentially. Each task is one git commit.
 - [x] Task 10 — GitHub Actions CI pipeline
 - [x] Task 11 — Rate limiting on webhook endpoint
 - [x] Task 12 — Sentry error monitoring
+
+## Round 2 — Production Hardening
+
+- [x] Task 13 — Health check endpoint (`GET /api/health`)
+- [x] Task 14 — Structured JSON logging
+- [x] Task 15 — Sentry source maps (`withSentryConfig`)
+- [x] Task 16 — Webhook idempotency (Redis dedup)
+- [x] Task 17 — WhatsApp opt-out handling (STOP/UNSUBSCRIBE)
+- [x] Task 18 — Conversation session TTL + RESET command
+- [x] Task 19 — Tool result persistence (multi-turn memory fix)

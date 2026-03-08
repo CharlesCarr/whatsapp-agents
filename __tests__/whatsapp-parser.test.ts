@@ -15,7 +15,8 @@ function makePayload(messages: object[], metadata = { display_phone_number: "346
               messaging_product: "whatsapp",
               metadata,
               contacts: [{ profile: { name: "Test Player" }, wa_id: "34600000000" }],
-              messages,
+              // Cast via unknown — tests supply partial objects; the parser handles missing fields gracefully
+              messages: messages as unknown as WhatsAppWebhookPayload["entry"][number]["changes"][number]["value"]["messages"],
             },
           },
         ],

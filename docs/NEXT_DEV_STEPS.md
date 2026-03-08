@@ -40,7 +40,7 @@ Ordered by business risk. Tasks marked **[BLOCKER]** must be done before the fir
 
 ## Priority 6 — Production Hardening
 
-### 6.1 Webhook Idempotency `[BLOCKER]`
+### ✅ 6.1 Webhook Idempotency
 
 **Files:** `app/api/webhooks/whatsapp/route.ts`, new Supabase table or Redis key
 **Complexity:** M
@@ -56,7 +56,7 @@ Return early (no agent call, no reply) if the message ID already exists.
 
 ---
 
-### 6.2 Sentry DSN + Source Maps in Production `[BLOCKER]`
+### ✅ 6.2 Sentry DSN + Source Maps in Production
 
 **Files:** `.env.local` / Vercel env vars, `next.config.ts`
 **Complexity:** S
@@ -90,7 +90,7 @@ Steps:
 
 ---
 
-### 6.4 Structured Logging
+### ✅ 6.4 Structured Logging
 
 **Files:** `lib/logger.ts` (create), all route handlers and agent loop
 **Complexity:** M
@@ -111,7 +111,7 @@ Key fields to include on webhook logs: `messageId`, `from`, `clubId`, `durationM
 
 ---
 
-### 6.5 Health Check Endpoint
+### ✅ 6.5 Health Check Endpoint
 
 **Files:** `app/api/health/route.ts` (create)
 **Complexity:** S
@@ -125,7 +125,7 @@ Returns `503` if the DB ping fails. Use this URL in Vercel uptime checks or an e
 
 ---
 
-### 6.6 WhatsApp Opt-Out Handling
+### ✅ 6.6 WhatsApp Opt-Out Handling
 
 **Files:** `app/api/webhooks/whatsapp/route.ts`, `lib/agent/conversation.ts`
 **Complexity:** M
@@ -167,7 +167,7 @@ Steps:
 
 ---
 
-### 7.2 Supabase `whatsapp_number` Column Verification
+### ✅ 7.2 Supabase `whatsapp_number` Column Verification
 
 **Files:** `supabase/migrations/` (may need new migration)
 **Complexity:** S
@@ -182,7 +182,7 @@ Run `npm run db:push` to apply.
 
 ---
 
-### 7.3 Conversation Session TTL / Reset
+### ✅ 7.3 Conversation Session TTL / Reset
 
 **Files:** `lib/agent/conversation.ts`, `app/api/conversations/` (or new endpoint)
 **Complexity:** M
@@ -199,7 +199,7 @@ Also add a player-facing reset command: if a message is exactly "RESET" or "STAR
 
 ## Priority 8 — Multi-Turn Context Fix
 
-### 8.1 Tool Result Persistence in Message History
+### ✅ 8.1 Tool Result Persistence in Message History
 
 **Files:** `lib/agent/conversation.ts`, `supabase/migrations/`
 **Complexity:** L
