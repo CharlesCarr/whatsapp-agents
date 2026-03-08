@@ -11,7 +11,7 @@ Tasks are completed sequentially. Each task is one git commit.
 - [x] Task 6 — Dashboard authentication (NextAuth v5)
 - [x] Task 7 — Multi-club DM routing by phone number ID
 - [x] Task 8 — Seed script (`npm run seed`)
-- [ ] Task 9 — Vitest test suite
+- [x] Task 9 — Vitest test suite
 - [ ] Task 10 — GitHub Actions CI pipeline
 - [ ] Task 11 — Rate limiting on webhook endpoint
 - [ ] Task 12 — Sentry error monitoring
