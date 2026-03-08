@@ -29,10 +29,22 @@ All tasks below have been implemented and committed.
 
 ### Priority 5 — Conversation Quality
 - [x] **5.1 Non-Text Message Handling** — Voice notes / images / video now receive a polite "I can only handle text messages" reply instead of silence
+- [x] **5.2 Multi-Turn Tool Context** — `tool_use_block` JSONB column on `messages`; history loader reconstructs proper `tool_use` + `tool_result` pairs instead of filtering them out
+
+### Priority 6 — Production Hardening
+- [x] **6.1 Webhook Idempotency** — Redis `SET NX EX 86400` on `wa:msg:<messageId>` deduplicates redelivered webhooks; graceful no-op without Redis
+- [x] **6.2 Sentry Source Maps** — `withSentryConfig()` in `next.config.ts`; `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` documented in `.env.example`
+- [x] **6.4 Structured Logging** — `lib/logger.ts` JSON wrapper (`log.info/warn/error`); replaces all `console.*` in webhook handler, agent loop, and WhatsApp client
+- [x] **6.5 Health Check Endpoint** — `GET /api/health` pings Supabase; returns `200 {status:"ok"}` or `503 {status:"error"}` for uptime monitors
+- [x] **6.6 WhatsApp Opt-Out Handling** — STOP/UNSUBSCRIBE sets `opted_out_at`, sends unsubscribe reply, silently drops future messages (Meta policy); START/YES re-subscribes
+
+### Priority 7 — Schema & Deployment Prep
+- [x] **7.2 Supabase `whatsapp_number` Column** — Column exists in initial migration; verified
+- [x] **7.3 Conversation Session TTL + RESET** — 7-day idle expiry clears message history; RESET/START OVER command deletes messages and resets `last_message_at`
 
 ---
 
-## Remaining / New Tasks
+## Remaining Tasks
 
 Ordered by business risk. Tasks marked **[BLOCKER]** must be done before the first paying club goes live.
 
@@ -40,104 +52,19 @@ Ordered by business risk. Tasks marked **[BLOCKER]** must be done before the fir
 
 ## Priority 6 — Production Hardening
 
-### ✅ 6.1 Webhook Idempotency
-
-**Files:** `app/api/webhooks/whatsapp/route.ts`, new Supabase table or Redis key
-**Complexity:** M
-
-WhatsApp (both 360dialog and Meta Cloud API) may re-deliver the same webhook if your server doesn't respond within 5 seconds or returns a non-200. Currently a duplicate delivery would run the agent twice and send the player two responses.
-
-Fix: before calling `runAgent()`, check whether `msg.messageId` has already been processed. Use a lightweight deduplication store:
-
-Option A — Supabase: add a `processed_message_ids` table with a `message_id` PK and a TTL-cleanup job.
-Option B — Redis: `SET msg:{id} 1 EX 86400 NX` (requires Upstash, which is already a dependency).
-
-Return early (no agent call, no reply) if the message ID already exists.
-
----
-
-### ✅ 6.2 Sentry DSN + Source Maps in Production
-
-**Files:** `.env.local` / Vercel env vars, `next.config.ts`
-**Complexity:** S
-
-Sentry is wired but won't capture anything until `SENTRY_DSN` is set. Without source maps, stack traces in the Sentry dashboard will be minified and hard to read.
-
-Steps:
-1. Create a Sentry project at sentry.io → copy the DSN
-2. Add `SENTRY_DSN` to Vercel env vars (all environments)
-3. Add `SENTRY_AUTH_TOKEN` for source map uploads:
-   ```bash
-   npx @sentry/wizard@latest -i nextjs --saas
-   ```
-   The wizard adds `withSentryConfig()` to `next.config.ts` and a `SENTRY_AUTH_TOKEN` env var.
-4. Verify by throwing a test error and confirming it appears in Sentry.
-
----
-
 ### 6.3 Upstash Redis Provisioning `[BLOCKER]`
 
 **Files:** `.env.local` / Vercel env vars
-**Complexity:** S
+**Complexity:** S (ops only — no code changes needed)
 
-Rate limiting is implemented but disabled until the env vars are set. Without it, a single player can flood the agent and exhaust Anthropic API credits.
+Rate limiting and webhook idempotency are implemented but disabled until the env vars are set. Without Redis, a single player can flood the agent and exhaust Anthropic API credits, and duplicate webhook deliveries will double-process messages.
 
 Steps:
 1. Create a free Upstash Redis database at console.upstash.com
 2. Copy `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`
 3. Add both to Vercel env vars (and `.env.local` for local testing)
-4. Verify: send 21+ rapid requests to `POST /api/webhooks/whatsapp` and confirm the 22nd returns 429.
-
----
-
-### ✅ 6.4 Structured Logging
-
-**Files:** `lib/logger.ts` (create), all route handlers and agent loop
-**Complexity:** M
-
-All logging currently uses `console.log` / `console.error`. In Vercel's log drain or any log aggregator, these produce unstructured blobs that are hard to query.
-
-Replace with a thin structured logger (e.g. `pino` or a hand-rolled JSON wrapper):
-```ts
-// lib/logger.ts
-export const log = {
-  info: (msg: string, ctx?: object) => console.log(JSON.stringify({ level: "info", msg, ...ctx })),
-  warn: (msg: string, ctx?: object) => console.warn(JSON.stringify({ level: "warn", msg, ...ctx })),
-  error: (msg: string, ctx?: object) => console.error(JSON.stringify({ level: "error", msg, ...ctx })),
-};
-```
-
-Key fields to include on webhook logs: `messageId`, `from`, `clubId`, `durationMs`.
-
----
-
-### ✅ 6.5 Health Check Endpoint
-
-**Files:** `app/api/health/route.ts` (create)
-**Complexity:** S
-
-Add `GET /api/health` that verifies the DB connection is alive and returns a structured status:
-```json
-{ "status": "ok", "db": "ok", "ts": "2026-03-07T..." }
-```
-
-Returns `503` if the DB ping fails. Use this URL in Vercel uptime checks or an external monitor (Better Uptime, UptimeRobot).
-
----
-
-### ✅ 6.6 WhatsApp Opt-Out Handling
-
-**Files:** `app/api/webhooks/whatsapp/route.ts`, `lib/agent/conversation.ts`
-**Complexity:** M
-
-If a player sends "STOP", "UNSUBSCRIBE", or "OPT OUT", the agent currently passes it to the LLM which will likely respond with booking-related text. Meta's platform policy requires honouring opt-out requests.
-
-Steps:
-1. In `handleMessages()`, before calling `runAgent()`, check if the message matches an opt-out keyword (case-insensitive).
-2. If matched: set a `opted_out_at` column on the `conversations` record, reply "You've been unsubscribed. Reply START to re-subscribe.", and skip the agent.
-3. Gate future messages from opted-out contacts: skip processing and do not reply.
-
-Add `opted_out_at TIMESTAMPTZ` to `conversations` table via migration.
+4. Verify rate limiting: send 21+ rapid requests to `POST /api/webhooks/whatsapp` and confirm the 22nd returns 429
+5. Verify idempotency: replay a webhook with a duplicate `messageId` and confirm the second is silently dropped
 
 ---
 
@@ -155,6 +82,7 @@ Steps:
 4. Set the Vercel project domain in the 360dialog portal as the webhook URL: `https://your-domain.vercel.app/api/webhooks/whatsapp`.
 5. Verify the webhook GET challenge response (360dialog will call it on registration).
 6. Send a test WhatsApp message to the registered number.
+7. Run `npm run db:push` to apply the 3 new migrations (`opted_out_at`, `last_message_at`, `tool_use_block`).
 
 **Environment variables checklist:**
 - `NEXT_PUBLIC_SUPABASE_URL`
@@ -163,61 +91,13 @@ Steps:
 - `WHATSAPP_API_URL` / `WHATSAPP_API_KEY` / `WHATSAPP_WEBHOOK_VERIFY_TOKEN` / `WHATSAPP_APP_SECRET`
 - `AUTH_SECRET` / `ADMIN_EMAIL` / `ADMIN_PASSWORD`
 - `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`
-- `SENTRY_DSN` / `SENTRY_AUTH_TOKEN`
+- `SENTRY_DSN` / `SENTRY_ORG` / `SENTRY_PROJECT` / `SENTRY_AUTH_TOKEN`
 
 ---
 
-### ✅ 7.2 Supabase `whatsapp_number` Column Verification
+## Priority 8 — Growth & Billing
 
-**Files:** `supabase/migrations/` (may need new migration)
-**Complexity:** S
-
-The multi-club routing added in Task 7 queries `clubs.whatsapp_number`. Verify this column exists in the live schema. If not, create a migration:
-```sql
-ALTER TABLE clubs ADD COLUMN IF NOT EXISTS whatsapp_number TEXT;
-CREATE INDEX IF NOT EXISTS clubs_whatsapp_number_idx ON clubs (whatsapp_number);
-```
-
-Run `npm run db:push` to apply.
-
----
-
-### ✅ 7.3 Conversation Session TTL / Reset
-
-**Files:** `lib/agent/conversation.ts`, `app/api/conversations/` (or new endpoint)
-**Complexity:** M
-
-Conversations currently grow indefinitely. Long-lived conversations have two problems:
-1. History is capped at 20 messages (`MAX_HISTORY`) but the DB record never closes.
-2. Players who return weeks later are greeted with stale context.
-
-Add a `last_message_at` column to `conversations`. If the last message is older than N days (e.g. 7), treat it as a new conversation (insert a fresh record) rather than continuing the old one.
-
-Also add a player-facing reset command: if a message is exactly "RESET" or "START OVER", clear the active conversation and start fresh.
-
----
-
-## Priority 8 — Multi-Turn Context Fix
-
-### ✅ 8.1 Tool Result Persistence in Message History
-
-**Files:** `lib/agent/conversation.ts`, `supabase/migrations/`
-**Complexity:** L
-
-**Current issue:** Intermediate tool-call messages are filtered from LLM history on load because the Anthropic API requires `tool_use` blocks to pair with `tool_result` blocks — but we only store the plain text summary. On a follow-up turn in a new session, the agent has no memory of tool results.
-
-**Correct fix:**
-1. Add a `tool_use_block` JSONB column to `messages` to store the full Anthropic `tool_use` content block alongside each ASSISTANT tool-calling message.
-2. On history load, reconstruct the proper Anthropic format: `{ role: "assistant", content: [toolUseBlock] }` + `{ role: "user", content: [toolResultBlock] }`.
-3. Remove the current filter that drops TOOL and intermediate ASSISTANT messages.
-
-This is a significant refactor of the message schema and agent loop. The current fallback (agent infers from its own final replies) is acceptable for MVP but will cause issues in complex multi-step bookings across sessions.
-
----
-
-## Priority 9 — Growth & Billing
-
-### 9.1 Stripe Billing Integration
+### 8.1 Stripe Billing Integration
 
 **Files:** `app/api/stripe/` (create), `app/(dashboard)/billing/` (create), Supabase `clubs` table
 **Complexity:** L
@@ -234,7 +114,7 @@ Steps:
 
 ---
 
-### 9.2 Club Self-Serve Onboarding
+### 8.2 Club Self-Serve Onboarding
 
 **Files:** `app/(dashboard)/onboarding/` (create), `app/api/clubs/` (extend)
 **Complexity:** L
@@ -255,7 +135,6 @@ Gate behind Stripe: only allow onboarding if payment is set up (or use a free tr
 
 These are tracked for future phases but should not block launch:
 
-- **5.2 Multi-Turn Tool Context** — see Priority 8 above for the full fix
 - **5.3 Player Name Persistence** — already works; no action needed
 - **Playtomic official API** — current adapter is reverse-engineered; apply for official partnership when volume justifies it
 - **Analytics dashboard** — booking volume, peak hours, common requests (post-launch)
