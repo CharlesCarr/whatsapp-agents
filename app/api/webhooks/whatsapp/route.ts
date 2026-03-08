@@ -66,6 +66,14 @@ async function handleMessages(payload: WhatsAppWebhookPayload) {
       await sendWhatsAppMessage(msg.from, response);
     } catch (err) {
       console.error(`[webhook] Error handling message from ${msg.from}:`, err);
+      try {
+        await sendWhatsAppMessage(
+          msg.from,
+          "Sorry, something went wrong. Please try again or contact the club directly."
+        );
+      } catch (sendErr) {
+        console.error(`[webhook] Failed to send fallback message to ${msg.from}:`, sendErr);
+      }
     }
   }
 }
