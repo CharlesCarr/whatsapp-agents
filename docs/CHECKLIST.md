@@ -14,4 +14,4 @@ Tasks are completed sequentially. Each task is one git commit.
 - [x] Task 9 — Vitest test suite
 - [x] Task 10 — GitHub Actions CI pipeline
 - [x] Task 11 — Rate limiting on webhook endpoint
-- [ ] Task 12 — Sentry error monitoring
+- [x] Task 12 — Sentry error monitoring

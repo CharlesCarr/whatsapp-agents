@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Required for instrumentation.ts (Sentry, OpenTelemetry, etc.) to load
+  experimental: {
+    instrumentationHook: true,
+  },
 };
 
 export default nextConfig;
