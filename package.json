@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "db:push": "supabase db push",
-    "db:types": "supabase gen types typescript --linked > lib/db/database.types.ts",
+    "db:types": "supabase gen types typescript --project-id hwjpccicniefgypaeikp > lib/db/database.types.ts",
     "db:diff": "supabase db diff",
     "seed": "npx tsx scripts/seed.ts",
     "test": "vitest run",
