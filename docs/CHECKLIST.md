@@ -4,7 +4,7 @@ Tasks are completed sequentially. Each task is one git commit.
 
 - [x] Task 0 — Create this checklist
 - [x] Task 1 — `.env.example` with all env vars
-- [ ] Task 2 — Graceful non-text message handling
+- [x] Task 2 — Graceful non-text message handling
 - [ ] Task 3 — Agent failure fallback WhatsApp message
 - [ ] Task 4 — Retry logic for `sendWhatsAppMessage`
 - [ ] Task 5 — Webhook HMAC signature verification

@@ -4,6 +4,7 @@ export interface IncomingMessage {
   from: string;        // sender's WhatsApp number (e.g. "15551234567")
   groupId?: string;    // group JID if from a group chat
   text: string;
+  type: string;        // "text", "image", "audio", "video", etc.
   timestamp: number;
   senderName?: string;
 }

@@ -40,6 +40,15 @@ async function handleMessages(payload: WhatsAppWebhookPayload) {
 
   for (const msg of messages) {
     try {
+      // Non-text messages (images, audio, video, etc.) — reply with a canned message
+      if (msg.text === "__NON_TEXT__") {
+        await sendWhatsAppMessage(
+          msg.from,
+          "Sorry, I can only handle text messages. Please type your request."
+        );
+        continue;
+      }
+
       const club = await resolveClub(msg.from, msg.groupId);
       if (!club) {
         console.warn(`[webhook] No club found for sender ${msg.from} group ${msg.groupId}`);

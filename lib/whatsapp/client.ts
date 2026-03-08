@@ -53,16 +53,29 @@ export function parseWebhook(payload: WhatsAppWebhookPayload): IncomingMessage[]
       );
 
       for (const msg of value.messages as WebhookMessage[]) {
-        if (msg.type !== "text" || !msg.text?.body) continue;
-
         const contact = contactMap.get(msg.from);
         const groupId = msg.group_id ?? msg.context?.group_id;
+
+        if (msg.type !== "text" || !msg.text?.body) {
+          // Push a synthetic message so the webhook handler can reply gracefully
+          messages.push({
+            messageId: msg.id,
+            from: msg.from,
+            groupId,
+            text: "__NON_TEXT__",
+            type: msg.type,
+            timestamp: parseInt(msg.timestamp, 10),
+            senderName: contact?.profile?.name,
+          });
+          continue;
+        }
 
         messages.push({
           messageId: msg.id,
           from: msg.from,
           groupId,
           text: msg.text.body,
+          type: msg.type,
           timestamp: parseInt(msg.timestamp, 10),
           senderName: contact?.profile?.name,
         });
