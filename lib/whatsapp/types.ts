@@ -7,6 +7,7 @@ export interface IncomingMessage {
   type: string;        // "text", "image", "audio", "video", etc.
   timestamp: number;
   senderName?: string;
+  receivingNumberId?: string; // phone_number_id from webhook metadata (for multi-club DM routing)
 }
 
 // 360dialog / Meta Cloud API webhook payload shapes

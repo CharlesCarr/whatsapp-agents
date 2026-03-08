@@ -83,6 +83,8 @@ export function parseWebhook(payload: WhatsAppWebhookPayload): IncomingMessage[]
         (value.contacts ?? []).map((c: WebhookContact) => [c.wa_id, c])
       );
 
+      const receivingNumberId = value.metadata?.phone_number_id;
+
       for (const msg of value.messages as WebhookMessage[]) {
         const contact = contactMap.get(msg.from);
         const groupId = msg.group_id ?? msg.context?.group_id;
@@ -97,6 +99,7 @@ export function parseWebhook(payload: WhatsAppWebhookPayload): IncomingMessage[]
             type: msg.type,
             timestamp: parseInt(msg.timestamp, 10),
             senderName: contact?.profile?.name,
+            receivingNumberId,
           });
           continue;
         }
@@ -109,6 +112,7 @@ export function parseWebhook(payload: WhatsAppWebhookPayload): IncomingMessage[]
           type: msg.type,
           timestamp: parseInt(msg.timestamp, 10),
           senderName: contact?.profile?.name,
+          receivingNumberId,
         });
       }
     }

@@ -65,7 +65,7 @@ async function handleMessages(payload: WhatsAppWebhookPayload) {
         continue;
       }
 
-      const club = await resolveClub(msg.from, msg.groupId);
+      const club = await resolveClub(msg.from, msg.groupId, msg.receivingNumberId);
       if (!club) {
         console.warn(`[webhook] No club found for sender ${msg.from} group ${msg.groupId}`);
         continue;
@@ -94,7 +94,11 @@ async function handleMessages(payload: WhatsAppWebhookPayload) {
   }
 }
 
-async function resolveClub(senderPhone: string, groupId?: string): Promise<Club | null> {
+async function resolveClub(
+  senderPhone: string,
+  groupId?: string,
+  receivingNumberId?: string
+): Promise<Club | null> {
   // Group message → look up by group ID
   if (groupId) {
     const { data: group } = await db
@@ -107,8 +111,19 @@ async function resolveClub(senderPhone: string, groupId?: string): Promise<Club 
     if (club?.is_active) return club;
   }
 
-  // DM → fall back to first active club (single-club setup)
-  // TODO: route by the receiving phone number from webhook metadata for multi-club
+  // DM with a known receiving number → route to the matching club
+  if (receivingNumberId) {
+    const { data: club } = await db
+      .from("clubs")
+      .select("*")
+      .eq("whatsapp_number", receivingNumberId)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (club) return club;
+  }
+
+  // Fallback: first active club (single-club / misconfigured multi-club setup)
   const { data: club } = await db
     .from("clubs")
     .select("*")
