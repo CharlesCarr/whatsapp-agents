@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseWebhook, verifyWebhookChallenge, sendWhatsAppMessage } from "@/lib/whatsapp/client";
+import { parseWebhook, verifyWebhookChallenge, verifySignature, sendWhatsAppMessage } from "@/lib/whatsapp/client";
 import { db } from "@/lib/db";
 import { runAgent } from "@/lib/agent/conversation";
 import type { WhatsAppWebhookPayload } from "@/lib/whatsapp/types";
@@ -20,9 +20,25 @@ export async function GET(req: NextRequest) {
 
 // POST — incoming WhatsApp messages
 export async function POST(req: NextRequest) {
+  const rawBody = await req.text();
+
+  // HMAC signature verification — skip in development if secret is not configured
+  const appSecret = process.env.WHATSAPP_APP_SECRET;
+  if (appSecret) {
+    const signature = req.headers.get("x-hub-signature-256") ?? "";
+    if (!verifySignature(rawBody, signature, appSecret)) {
+      console.warn("[webhook] Invalid HMAC signature — request rejected");
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  } else if (process.env.NODE_ENV !== "development") {
+    // In non-dev environments, require the secret to be set
+    console.error("[webhook] WHATSAPP_APP_SECRET not set — rejecting request");
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   let payload: WhatsAppWebhookPayload;
   try {
-    payload = await req.json() as WhatsAppWebhookPayload;
+    payload = JSON.parse(rawBody) as WhatsAppWebhookPayload;
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }

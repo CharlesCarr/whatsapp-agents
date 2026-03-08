@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "crypto";
 import type { IncomingMessage, WhatsAppWebhookPayload, WebhookMessage, WebhookContact } from "./types";
 
 const WA_API_URL = process.env.WHATSAPP_API_URL || "https://waba.360dialog.io/v1";
@@ -126,4 +127,22 @@ export function verifyWebhookChallenge(params: {
     return params.challenge;
   }
   return null;
+}
+
+/**
+ * Verify the X-Hub-Signature-256 header from Meta / 360dialog webhooks.
+ * Uses Node's built-in crypto — no extra dependencies.
+ * Returns true if the signature matches, false otherwise.
+ */
+export function verifySignature(body: string, signature: string, secret: string): boolean {
+  try {
+    const expected = "sha256=" + createHmac("sha256", secret).update(body).digest("hex");
+    const expectedBuf = Buffer.from(expected);
+    const signatureBuf = Buffer.from(signature);
+    // Buffers must be the same length for timingSafeEqual
+    if (expectedBuf.length !== signatureBuf.length) return false;
+    return timingSafeEqual(expectedBuf, signatureBuf);
+  } catch {
+    return false;
+  }
 }

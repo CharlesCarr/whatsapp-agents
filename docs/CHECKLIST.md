@@ -7,7 +7,7 @@ Tasks are completed sequentially. Each task is one git commit.
 - [x] Task 2 — Graceful non-text message handling
 - [x] Task 3 — Agent failure fallback WhatsApp message
 - [x] Task 4 — Retry logic for `sendWhatsAppMessage`
-- [ ] Task 5 — Webhook HMAC signature verification
+- [x] Task 5 — Webhook HMAC signature verification
 - [ ] Task 6 — Dashboard authentication (NextAuth v5)
 - [ ] Task 7 — Multi-club DM routing by phone number ID
 - [ ] Task 8 — Seed script (`npm run seed`)
