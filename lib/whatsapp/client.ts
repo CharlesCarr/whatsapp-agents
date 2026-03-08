@@ -4,6 +4,8 @@ const WA_API_URL = process.env.WHATSAPP_API_URL || "https://waba.360dialog.io/v1
 const WA_API_KEY = process.env.WHATSAPP_API_KEY || "";
 const WA_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || "";
 
+const RETRY_DELAYS_MS = [500, 1000, 2000];
+
 // 360dialog uses a different base URL and auth header than Meta Cloud API
 // When migrating to Meta Cloud API, update WA_API_URL and swap D360-WABA-Key for Bearer token
 export async function sendWhatsAppMessage(to: string, text: string): Promise<void> {
@@ -28,16 +30,44 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<voi
     headers["Authorization"] = `Bearer ${WA_API_KEY}`;
   }
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
+  let lastError: Error | null = null;
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`WhatsApp send failed: ${res.status} ${err}`);
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    if (attempt > 0) {
+      const delay = RETRY_DELAYS_MS[attempt - 1]!;
+      console.log(`[whatsapp] Retry attempt ${attempt} after ${delay}ms`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+
+      // Don't retry 4xx — the request itself is bad and won't improve
+      if (res.status >= 400 && res.status < 500) {
+        const err = await res.text();
+        throw new Error(`WhatsApp send failed (${res.status}): ${err}`);
+      }
+
+      if (!res.ok) {
+        const err = await res.text();
+        lastError = new Error(`WhatsApp send failed (${res.status}): ${err}`);
+        continue; // retry on 5xx
+      }
+
+      return; // success
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith("WhatsApp send failed (4")) {
+        throw err; // don't retry 4xx
+      }
+      lastError = err instanceof Error ? err : new Error(String(err));
+    }
   }
+
+  throw lastError ?? new Error("WhatsApp send failed after retries");
 }
 
 export function parseWebhook(payload: WhatsAppWebhookPayload): IncomingMessage[] {
