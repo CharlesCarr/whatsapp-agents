@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { waitUntil } from "@vercel/functions";
 import { parseWebhook, verifyWebhookChallenge, verifySignature, sendWhatsAppMessage } from "@/lib/whatsapp/client";
 import { db } from "@/lib/db";
 import { runAgent } from "@/lib/agent/conversation";
@@ -54,9 +55,12 @@ export async function POST(req: NextRequest) {
   }
 
   // Acknowledge immediately — WhatsApp requires <5s response
-  handleMessages(payload).catch((err) => {
-    log.error("[webhook] processing error", { error: String(err) });
-  });
+  // waitUntil keeps the Vercel function alive until processing completes
+  waitUntil(
+    handleMessages(payload).catch((err) => {
+      log.error("[webhook] processing error", { error: String(err) });
+    })
+  );
 
   return NextResponse.json({ status: "ok" }, { status: 200 });
 }
