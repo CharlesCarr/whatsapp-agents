@@ -2,6 +2,8 @@
 
 Prioritized near-term tasks ordered by business risk. Complete Priority 1 before any real club goes live.
 
+(manual test = redeploy)
+
 ---
 
 ## ✅ Completed
