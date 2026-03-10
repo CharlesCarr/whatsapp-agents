@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import type { Json } from "@/lib/db/database.types";
 import { z } from "zod";
+import { log } from "@/lib/logger";
 
 const UpdateSchema = z.object({
   name: z.string().min(1).optional(),
@@ -21,7 +22,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     .eq("id", id)
     .single();
 
-  if (error) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (error) {
+    log.warn("clubs.get not found", { id });
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   return NextResponse.json(club);
 }
 
@@ -31,6 +35,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const parsed = UpdateSchema.safeParse(body);
 
   if (!parsed.success) {
+    log.warn("clubs.update validation failed", { id, issues: parsed.error.flatten() });
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
@@ -46,13 +51,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    log.error("clubs.update db failed", { id, error: error.message });
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  log.info("clubs.update success", { id });
   return NextResponse.json(club);
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { error } = await db.from("clubs").delete().eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    log.error("clubs.delete db failed", { id, error: error.message });
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  log.info("clubs.delete success", { id });
   return new NextResponse(null, { status: 204 });
 }

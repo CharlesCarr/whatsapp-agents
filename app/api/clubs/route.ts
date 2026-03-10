@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import type { Json } from "@/lib/db/database.types";
 import { z } from "zod";
+import { log } from "@/lib/logger";
 
 const ClubSchema = z.object({
   name: z.string().min(1),
@@ -18,7 +19,10 @@ export async function GET() {
     .select("*, whatsapp_groups(*)")
     .order("created_at", { ascending: false });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    log.error("clubs.list failed", { error: error.message });
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   return NextResponse.json(clubs);
 }
 
@@ -27,6 +31,7 @@ export async function POST(req: NextRequest) {
   const parsed = ClubSchema.safeParse(body);
 
   if (!parsed.success) {
+    log.warn("clubs.create validation failed", { issues: parsed.error.flatten() });
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
@@ -41,6 +46,10 @@ export async function POST(req: NextRequest) {
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    log.error("clubs.create db failed", { error: error.message, slug: rest.slug });
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  log.info("clubs.create success", { id: club.id, slug: club.slug });
   return NextResponse.json(club, { status: 201 });
 }
