@@ -20,7 +20,7 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<voi
 
   const url = WA_API_URL.includes("360dialog")
     ? `${WA_API_URL}/messages`
-    : `https://graph.facebook.com/v18.0/${WA_PHONE_NUMBER_ID}/messages`;
+    : `https://graph.facebook.com/v22.0/${WA_PHONE_NUMBER_ID}/messages`;
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
