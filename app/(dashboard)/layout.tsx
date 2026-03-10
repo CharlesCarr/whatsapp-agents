@@ -21,6 +21,7 @@ export default async function DashboardLayout({
             <NavItem href="/clubs" label="Clubs" />
             <NavItem href="/conversations" label="Conversations" />
             <NavItem href="/activity" label="Booking Activity" />
+            <NavItem href="/billing" label="Billing" />
             <div className="pt-2 mt-2 border-t border-zinc-100 dark:border-zinc-800">
               <NavItem href="/test" label="Test Agent" />
             </div>

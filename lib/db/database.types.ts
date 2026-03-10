@@ -69,6 +69,8 @@ export type Database = {
           is_active: boolean
           name: string
           slug: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
           updated_at: string
           whatsapp_number: string
         }
@@ -81,6 +83,8 @@ export type Database = {
           is_active?: boolean
           name: string
           slug: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           updated_at?: string
           whatsapp_number: string
         }
@@ -93,6 +97,8 @@ export type Database = {
           is_active?: boolean
           name?: string
           slug?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           updated_at?: string
           whatsapp_number?: string
         }
